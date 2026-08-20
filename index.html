@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RailGuard — Track Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root{
+    --navy:#0F2438;
+    --navy-2:#16324D;
+    --rail-blue:#1F5C99;
+    --amber:#E8A33D;
+    --red:#C0392B;
+    --green:#2F9E44;
+    --paper:#EEF1F0;
+    --panel:#FFFFFF;
+    --line:#D7DDE0;
+    --ink:#1B2530;
+    --ink-soft:#5B6B76;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Oswald',sans-serif;}
+
+  /* ---------- Header ---------- */
+  header.top{
+    background:var(--navy);
+    color:#fff;
+    padding:18px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:4px solid var(--amber);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{
+    width:38px;height:38px;border-radius:6px;
+    background:linear-gradient(135deg,var(--rail-blue),var(--navy-2));
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid var(--amber);
+    flex-shrink:0;
+  }
+  .brand .mark svg{width:20px;height:20px;}
+  .brand-text .title{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:2px;
+    line-height:1;
+  }
+  .brand-text .sub{
+    font-size:11px;
+    letter-spacing:1.5px;
+    color:#9FB3C4;
+    text-transform:uppercase;
+    margin-top:4px;
+  }
+  .status-chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:#9FB3C4;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .status-chip .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 0 3px rgba(47,158,68,0.2);
+  }
+
+  main{max-width:1100px;margin:0 auto;padding:28px 20px 60px;}
+
+  .back-link{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:13px;font-weight:600;color:var(--rail-blue);
+    cursor:pointer;margin-bottom:16px;background:none;border:none;
+    padding:0;
+  }
+  .back-link:hover{text-decoration:underline;}
+
+  /* ---------- Screen: Route select ---------- */
+  .hero{
+    text-align:center;
+    padding:40px 10px 20px;
+  }
+  .hero h1{
+    font-family:'Oswald',sans-serif;
+    font-size:30px;
+    font-weight:600;
+    margin:0 0 8px;
+    letter-spacing:0.5px;
+  }
+  .hero p{
+    color:var(--ink-soft);
+    font-size:14px;
+    margin:0;
+  }
+  .route-form{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:28px;
+    max-width:600px;
+    margin:28px auto 0;
+    box-shadow:0 1px 3px rgba(15,36,56,0.06);
+  }
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:14px;
+    align-items:end;
+  }
+  .field label{
+    display:block;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  select{
+    width:100%;
+    padding:11px 12px;
+    border:1.5px solid var(--line);
+    border-radius:7px;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    background:#fff;
+  }
+  select:focus{outline:2px solid var(--rail-blue);outline-offset:1px;}
+  .swap-icon{
+    width:36px;height:36px;border-radius:50%;
+    background:var(--paper);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--rail-blue);
+    margin-bottom:2px;
+  }
+  .find-btn{
+    width:100%;
+    margin-top:20px;
+    padding:13px;
+    border:none;
+    border-radius:7px;
+    background:var(--navy);
+    color:#fff;
+    font-weight:600;
+    font-size:14px;
+    letter-spacing:0.5px;
+    cursor:pointer;
+  }
+  .find-btn:hover{background:var(--navy-2);}
+  .find-btn:disabled{background:#B7C2CA;cursor:not-allowed;}
+  .form-error{
+    color:var(--red);
+    font-size:12.5px;
+    margin-top:10px;
+    text-align:center;
+  }
+
+  /* ---------- Screen: Track list ---------- */
+  .route-heading{
+    font-family:'Oswald',sans-serif;
+    font-size:22px;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  .route-heading .arrow{color:var(--amber);margin:0 8px;}
+  .route-sub{color:var(--ink-soft);font-size:13px;margin-bottom:20px;}
+
+  .stat-row{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:24px;
+  }
+  .stat-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .stat-card .num{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;
+    font-weight:600;
+  }
+  .stat-card .lbl{
+    font-size:11px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-top:2px;
+  }
+
+  .track-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:14px;
+  }
+  .track-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:16px;
+    cursor:pointer;
+    transition:box-shadow .15s ease, transform .15s ease;
+  }
+  .track-card:hover{
+    box-shadow:0 4px 14px rgba(15,36,56,0.10);
+    transform:translateY(-2px);
+  }
+  .track-card-top{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    margin-bottom:10px;
+  }
+  .track-name{
+    font-family:'Oswald',sans-serif;
+    font-size:17px;
+    font-weight:600;
+  }
+  .led{width:10px;height:10px;border-radius:50%;margin-top:4px;flex-shrink:0;}
+  .badge{
+    display:inline-block;
+    font-size:11px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:20px;
+    letter-spacing:0.3px;
+  }
+  .badge.good{background:rgba(47,158,68,0.12);color:var(--green);}
+  .badge.attention{background:rgba(232,163,61,0.15);color:#946118;}
+  .badge.critical{background:rgba(192,57,43,0.12);color:var(--red);}
+
+  .track-meta{
+    display:flex;
+    justify-content:space-between;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+  }
+  .track-meta .val{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--ink);
+    font-weight:600;
+    font-size:14px;
+  }
+
+  /* ---------- Screen: Track detail ---------- */
+  .detail-top{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    margin-bottom:18px;flex-wrap:wrap;gap:10px;
+  }
+  .filters{display:flex;gap:10px;}
+  .filters select{width:auto;padding:8px 10px;font-size:13px;}
+
+  .map-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .map-panel-title{
+    font-size:11px;font-weight:700;letter-spacing:1px;
+    color:var(--ink-soft);text-transform:uppercase;margin-bottom:16px;
+  }
+  .track-map{
+    position:relative;
+    height:380px;
+    margin:10px 0 16px;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .track-map .maplibregl-ctrl-attrib{font-size:10px;}
+
+  /* ---- Station markers on the MapLibre map ---- */
+  .mgl-station-marker{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    cursor:default;
+  }
+  .mgl-station-marker .sq{
+    width:15px;height:15px;background:var(--navy);border-radius:3px;
+    border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);
+  }
+  .mgl-station-marker .lbl{
+    font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;
+    background:#fff;padding:2px 6px;border-radius:4px;
+    border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  /* ---- Defect GPS markers on the MapLibre map (plain red circle) ---- */
+  .mgl-defect-marker{
+    width:20px;height:20px;
+    background:red;
+    border:3px solid #fff;
+    border-radius:50%;
+    box-shadow:0 0 10px rgba(255,0,0,0.8);
+    cursor:pointer;
+    transition:transform .12s ease;
+  }
+  .mgl-defect-marker:hover, .mgl-defect-marker.active{
+    transform:scale(1.2);
+  }
+
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-top:6px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend .sw{width:9px;height:9px;border-radius:50%;}
+
+  /* ---- MapLibre popup content (railway issue detail card, white card / red header) ---- */
+  .maplibregl-popup-content{
+    padding:5px !important;
+    border-radius:8px !important;
+    box-shadow:0 6px 20px rgba(0,0,0,0.25) !important;
+  }
+  .popup{font-family:Arial,sans-serif;min-width:210px;padding:5px;font-size:12.5px;}
+  .popup h3{
+    margin:0 0 10px 0;color:red;font-size:15px;font-weight:bold;
+  }
+  .popup p{margin:3px 0;color:var(--ink);}
+  .popup p strong{color:var(--ink-soft);}
+
+  table.defect-table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    font-size:13px;
+  }
+  table.defect-table thead th{
+    text-align:left;
+    font-size:11px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    padding:12px 14px;
+    background:#F6F8F8;
+    border-bottom:1px solid var(--line);
+  }
+  table.defect-table td{
+    padding:11px 14px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  table.defect-table tbody tr{cursor:pointer;}
+  table.defect-table tbody tr:hover{background:#F5F8FA;}
+  table.defect-table tbody tr.active-row{background:#E9F1F8;}
+  table.defect-table tbody tr:last-child td{border-bottom:none;}
+  .sev-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
+  .sev-dot.high{background:var(--red);}
+  .sev-dot.medium{background:var(--amber);}
+  .sev-dot.low{background:var(--green);}
+  .status-pill{
+    font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;
+  }
+  .status-pill.open{background:rgba(192,57,43,0.1);color:var(--red);}
+  .status-pill.monitoring{background:rgba(232,163,61,0.15);color:#946118;}
+  .status-pill.resolved{background:rgba(47,158,68,0.12);color:var(--green);}
+
+  .empty-note{
+    text-align:center;color:var(--ink-soft);font-size:13px;padding:24px;
+  }
+
+  /* ---------- Database sensor data (from app.py / MongoDB) ---------- */
+  .sensor-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px;
+    margin:20px 0;
+  }
+  .sensor-panel-title{
+    font-size:11px;font-weight:700;letter-spacing:1px;
+    color:var(--ink-soft);text-transform:uppercase;margin-bottom:14px;
+  }
+  .sensor-grid{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+  }
+  .sensor-value{
+    background:#F6F8F8;border:1px solid var(--line);border-radius:8px;padding:12px;
+  }
+  .sensor-value .k{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;}
+  .sensor-value .v{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;margin-top:5px;word-break:break-word;}
+  .sensor-subgrid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;
+  }
+  .sensor-table-wrap{overflow:auto;margin-top:14px;}
+  .sensor-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .sensor-table th,.sensor-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;}
+  .sensor-table th{font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:#F6F8F8;}
+  .sensor-map-marker{width:14px;height:14px;background:#1F5C99;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #1F5C99,0 1px 5px rgba(0,0,0,.35);}
+  @media (max-width:640px){
+    .sensor-grid{grid-template-columns:repeat(2,1fr);}
+    .sensor-subgrid{grid-template-columns:1fr;}
+
+    .field-row{grid-template-columns:1fr;}
+    .swap-icon{display:none;}
+    .stat-row{grid-template-columns:repeat(2,1fr);}
+    table.defect-table{font-size:12px;}
+    table.defect-table thead th:nth-child(4),
+    table.defect-table td:nth-child(4){display:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M3 20h18M7 16v4M17 16v4M3 10h18"/></svg>
+    </div>
+    <div class="brand-text">
+      <div class="title">RAILGUARD</div>
+      <div class="sub">Track Defect Monitoring</div>
+    </div>
+  </div>
+  <div class="status-chip"><span class="dot"></span> Database data mode</div>
+</header>
+
+<main id="app"></main>
+
+<script>
+/* =========================================================
+   EXISTING ROUTE/DEFECT UI DATA LAYER
+   The original route/track UI is kept unchanged. Database sensor fields from
+   app.py are added below through /api/data.
+========================================================= */
+
+const STATE_BOUNDS = {
+  "Andhra Pradesh": [12.6,19.9,76.8,84.8],
+  "Arunachal Pradesh": [26.6,29.4,91.6,97.4],
+  "Assam": [24.1,27.9,89.7,96.0],
+  "Bihar": [24.3,27.5,83.3,88.3],
+  "Chhattisgarh": [17.8,24.1,80.2,84.4],
+  "Goa": [14.9,15.8,73.7,74.3],
+  "Gujarat": [20.1,24.7,68.2,74.5],
+  "Haryana": [27.7,30.9,74.5,77.6],
+  "Himachal Pradesh": [30.4,33.3,75.6,79.0],
+  "Jharkhand": [21.9,25.4,83.3,87.9],
+  "Karnataka": [11.6,18.5,74.1,78.6],
+  "Kerala": [8.2,12.8,74.9,77.4],
+  "Madhya Pradesh": [21.1,26.9,74.0,82.8],
+  "Maharashtra": [15.6,22.0,72.6,80.9],
+  "Manipur": [23.8,25.7,93.0,94.8],
+  "Nagaland": [25.2,27.0,93.3,95.8],
+  "Odisha": [17.8,22.6,81.4,87.5],
+  "Punjab": [29.5,32.5,73.9,76.9],
+  "Rajasthan": [23.0,30.2,69.5,78.3],
+  "Tamil Nadu": [8.1,13.6,76.2,80.4],
+  "Telangana": [15.8,19.9,77.2,81.3],
+  "Tripura": [22.9,24.5,91.1,92.3],
+  "Uttar Pradesh": [23.9,30.4,77.1,84.6],
+  "Uttarakhand": [28.7,31.5,77.6,81.1],
+  "West Bengal": [21.5,27.2,85.8,89.9],
+  "Delhi (NCT)": [28.4,28.9,76.8,77.4],
+  "Jammu & Kashmir": [32.3,37.1,73.8,80.3],
+  "Chandigarh": [30.68,30.78,76.72,76.82],
+  "Puducherry": [10.75,12.0,79.6,79.9],
+};
+
+const REAL_DISTRICT_COORDS = {
+  "Tamil Nadu|Ariyalur": {lat:11.1401, lng:79.0782},
+  "Tamil Nadu|Chengalpattu": {lat:12.6819, lng:79.9888},
+  "Tamil Nadu|Chennai": {lat:13.0827, lng:80.2707},
+  "Tamil Nadu|Coimbatore": {lat:11.0168, lng:76.9558},
+  "Tamil Nadu|Cuddalore": {lat:11.7480, lng:79.7714},
+  "Tamil Nadu|Dharmapuri": {lat:12.1277, lng:78.1580},
+  "Tamil Nadu|Dindigul": {lat:10.3673, lng:77.9803},
+  "Tamil Nadu|Erode": {lat:11.3410, lng:77.7172},
+  "Tamil Nadu|Kallakurichi": {lat:11.7382, lng:78.9593},
+  "Tamil Nadu|Kanchipuram": {lat:12.8342, lng:79.7036},
+  "Tamil Nadu|Kanyakumari": {lat:8.0883, lng:77.5385},
+  "Tamil Nadu|Karur": {lat:10.9601, lng:78.0766},
+  "Tamil Nadu|Krishnagiri": {lat:12.5186, lng:78.2137},
+  "Tamil Nadu|Madurai": {lat:9.9252, lng:78.1198},
+  "Tamil Nadu|Mayiladuthurai": {lat:11.1017, lng:79.6538},
+  "Tamil Nadu|Nagapattinam": {lat:10.7672, lng:79.8449},
+  "Tamil Nadu|Namakkal": {lat:11.2189, lng:78.1677},
+  "Tamil Nadu|Nilgiris": {lat:11.4064, lng:76.6932},
+  "Tamil Nadu|Perambalur": {lat:11.2342, lng:78.8807},
+  "Tamil Nadu|Pudukkottai": {lat:10.3833, lng:78.8001},
+  "Tamil Nadu|Ramanathapuram": {lat:9.3639, lng:78.8395},
+  "Tamil Nadu|Ranipet": {lat:12.9249, lng:79.3308},
+  "Tamil Nadu|Salem": {lat:11.6643, lng:78.1460},
+  "Tamil Nadu|Sivaganga": {lat:9.8433, lng:78.4809},
+  "Tamil Nadu|Tenkasi": {lat:8.9591, lng:77.3152},
+  "Tamil Nadu|Thanjavur": {lat:10.7870, lng:79.1378},
+  "Tamil Nadu|Theni": {lat:10.0104, lng:77.4768},
+  "Tamil Nadu|Thoothukudi": {lat:8.7642, lng:78.1348},
+  "Tamil Nadu|Tiruchirappalli": {lat:10.7905, lng:78.7047},
+  "Tamil Nadu|Tirunelveli": {lat:8.7139, lng:77.7567},
+  "Tamil Nadu|Tirupathur": {lat:12.4959, lng:78.5730},
+  "Tamil Nadu|Tiruppur": {lat:11.1085, lng:77.3411},
+  "Tamil Nadu|Tiruvallur": {lat:13.1231, lng:79.9089},
+  "Tamil Nadu|Tiruvannamalai": {lat:12.2253, lng:79.0747},
+  "Tamil Nadu|Tiruvarur": {lat:10.7661, lng:79.6345},
+  "Tamil Nadu|Vellore": {lat:12.9165, lng:79.1325},
+  "Tamil Nadu|Viluppuram": {lat:11.9401, lng:79.4861},
+  "Tamil Nadu|Virudhunagar": {lat:9.5851, lng:77.9581},
+};
+
+function districtCoord(state, name){
+  const real = REAL_DISTRICT_COORDS[state+"|"+name];
+  if(real) return real;
+  const b = STATE_BOUNDS[state];
+  const rng = mulberry32(seedFromString(state+"|"+name));
+  const lat = b[0] + rng()*(b[1]-b[0]);
+  const lng = b[2] + rng()*(b[3]-b[2]);
+  return {lat:+lat.toFixed(4), lng:+lng.toFixed(4)};
+}
+function mkDistricts(state, names){
+  return names.map(n => ({name:n, ...districtCoord(state,n)}));
+}
+
+const STATE_DISTRICTS = {
+  "Andhra Pradesh": mkDistricts("Andhra Pradesh", ["Srikakulam","Parvathipuram Manyam","Vizianagaram","Visakhapatnam","Anakapalli","Alluri Sitharama Raju","Kakinada","East Godavari","Konaseema","West Godavari","Eluru","Krishna","NTR","Guntur","Palnadu","Bapatla","Prakasam","SPSR Nellore","Kurnool","Nandyal","Anantapur","Sri Sathya Sai","YSR Kadapa","Annamayya","Chittoor","Tirupati"]),
+  "Arunachal Pradesh": mkDistricts("Arunachal Pradesh", ["Tawang","West Kameng","East Kameng","Pakke-Kessang","Bichom","Papum Pare","Lower Subansiri","Keyi Panyor","Kurung Kumey","Kra Daadi","Kamle","Upper Subansiri","Lepa Rada","Shi Yomi","West Siang","Siang","Upper Siang","East Siang","Lower Siang","Lower Dibang Valley","Dibang Valley","Lohit","Anjaw","Namsai","Changlang","Tirap","Longding"]),
+  "Assam": mkDistricts("Assam", ["Baksa","Barpeta","Biswanath","Bongaigaon","Cachar","Charaideo","Chirang","Darrang","Dhemaji","Dhubri","Dibrugarh","Dima Hasao","Goalpara","Golaghat","Hailakandi","Hojai","Jorhat","Kamrup","Kamrup Metropolitan","Karbi Anglong","Karimganj","Kokrajhar","Lakhimpur","Majuli","Morigaon","Nagaon","Nalbari","Sivasagar","Sonitpur","South Salmara-Mankachar","Tinsukia","Udalguri","West Karbi Anglong","Bajali","Tamulpur"]),
+  "Bihar": mkDistricts("Bihar", ["Araria","Arwal","Aurangabad","Banka","Begusarai","Bhagalpur","Bhojpur","Buxar","Darbhanga","East Champaran","Gaya","Gopalganj","Jamui","Jehanabad","Kaimur","Katihar","Khagaria","Kishanganj","Lakhisarai","Madhepura","Madhubani","Munger","Muzaffarpur","Nalanda","Nawada","Patna","Purnia","Rohtas","Saharsa","Samastipur","Saran","Sheikhpura","Sheohar","Sitamarhi","Siwan","Supaul","Vaishali","West Champaran"]),
+  "Chhattisgarh": mkDistricts("Chhattisgarh", ["Bilaspur","Gaurella-Pendra-Marwahi","Janjgir-Champa","Korba","Mungeli","Raigarh","Sakti","Sarangarh-Bilaigarh","Baloda Bazar","Dhamtari","Gariaband","Mahasamund","Raipur","Balrampur-Ramanujganj","Jashpur","Koriya","Manendragarh-Chirmiri-Bharatpur","Surajpur","Surguja","Bijapur","Dantewada","Kanker","Bastar","Kondagaon","Narayanpur","Sukma","Balod","Bemetra","Durg","Kabirdham","Khairagarh-Chhuikhadan-Gandai","Mohla-Manpur-Ambagarh Chowki","Rajnandgaon"]),
+  "Goa": mkDistricts("Goa", ["North Goa","South Goa"]),
+  "Gujarat": mkDistricts("Gujarat", ["Ahmedabad","Amreli","Anand","Aravalli","Banaskantha","Bharuch","Bhavnagar","Botad","Chhota Udepur","Dahod","Dang","Devbhoomi Dwarka","Gandhinagar","Gir Somnath","Jamnagar","Junagadh","Kheda","Kutch","Mahisagar","Mehsana","Morbi","Narmada","Navsari","Panchmahal","Patan","Porbandar","Rajkot","Sabarkantha","Surat","Surendranagar","Tapi","Vadodara","Valsad"]),
+  "Haryana": mkDistricts("Haryana", ["Ambala","Bhiwani","Charkhi Dadri","Faridabad","Fatehabad","Gurugram","Hisar","Jhajjar","Jind","Kaithal","Karnal","Kurukshetra","Mahendragarh","Nuh","Palwal","Panchkula","Panipat","Rewari","Rohtak","Sirsa","Sonipat","Yamunanagar"]),
+  "Himachal Pradesh": mkDistricts("Himachal Pradesh", ["Bilaspur","Chamba","Hamirpur","Kangra","Kinnaur","Kullu","Lahaul and Spiti","Mandi","Shimla","Sirmaur","Solan","Una"]),
+  "Jharkhand": mkDistricts("Jharkhand", ["Bokaro","Chatra","Deoghar","Dhanbad","Dumka","East Singhbhum","Garhwa","Giridih","Godda","Gumla","Hazaribagh","Jamtara","Khunti","Koderma","Latehar","Lohardaga","Pakur","Palamu","Ramgarh","Ranchi","Sahebganj","Seraikela Kharsawan","Simdega","West Singhbhum"]),
+  "Karnataka": mkDistricts("Karnataka", ["Bagalkot","Ballari","Belagavi","Bengaluru Rural","Bengaluru Urban","Bidar","Chamarajanagar","Chikballapur","Chikkamagaluru","Chitradurga","Dakshina Kannada","Davanagere","Dharwad","Gadag","Hassan","Haveri","Kalaburagi","Kodagu","Kolar","Koppal","Mandya","Mysuru","Raichur","Ramanagara","Shivamogga","Tumakuru","Udupi","Uttara Kannada","Vijayapura","Yadgir","Vijayanagara"]),
+  "Kerala": mkDistricts("Kerala", ["Alappuzha","Ernakulam","Idukki","Kannur","Kasaragod","Kollam","Kottayam","Kozhikode","Malappuram","Palakkad","Pathanamthitta","Thiruvananthapuram","Thrissur","Wayanad"]),
+  "Madhya Pradesh": mkDistricts("Madhya Pradesh", ["Bhopal","Raisen","Rajgarh","Sehore","Vidisha","Morena","Bhind","Sheopur","Gwalior","Ashoknagar","Datia","Guna","Shivpuri","Indore","Alirajpur","Barwani","Burhanpur","Dhar","Jhabua","Khandwa","Khargone","Ujjain","Agar Malwa","Dewas","Mandsaur","Neemuch","Ratlam","Shajapur","Jabalpur","Balaghat","Chhindwara","Katni","Mandla","Narsinghpur","Seoni","Dindori","Sagar","Chhatarpur","Damoh","Panna","Tikamgarh","Niwari","Rewa","Satna","Sidhi","Singrauli","Mauganj","Shahdol","Anuppur","Umaria","Narmadapuram","Betul","Harda","Maihar","Pandhurna"]),
+  "Maharashtra": mkDistricts("Maharashtra", ["Ahmednagar","Akola","Amravati","Chhatrapati Sambhajinagar","Beed","Bhandara","Buldhana","Chandrapur","Dhule","Gadchiroli","Gondia","Hingoli","Jalgaon","Jalna","Kolhapur","Latur","Mumbai City","Mumbai Suburban","Nagpur","Nanded","Nandurbar","Nashik","Dharashiv","Palghar","Parbhani","Pune","Raigad","Ratnagiri","Sangli","Satara","Sindhudurg","Solapur","Thane","Wardha","Washim","Yavatmal"]),
+  "Manipur": mkDistricts("Manipur", ["Bishnupur","Chandel","Churachandpur","Imphal East","Imphal West","Jiribam","Kakching","Kamjong","Kangpokpi","Noney","Pherzawl","Senapati","Tamenglong","Tengnoupal","Thoubal","Ukhrul"]),
+  "Nagaland": mkDistricts("Nagaland", ["Chumoukedima","Dimapur","Kiphire","Kohima","Longleng","Mokokchung","Mon","Niuland","Noklak","Peren","Phek","Shamator","Tuensang","Tseminyu","Wokha","Zunheboto"]),
+  "Odisha": mkDistricts("Odisha", ["Angul","Balangir","Balasore","Bargarh","Bhadrak","Boudh","Cuttack","Deogarh","Dhenkanal","Gajapati","Ganjam","Jagatsinghpur","Jajpur","Jharsuguda","Kalahandi","Kandhamal","Kendrapara","Kendujhar","Khordha","Koraput","Malkangiri","Mayurbhanj","Nabarangpur","Nayagarh","Nuapada","Puri","Rayagada","Sambalpur","Subarnapur","Sundargarh"]),
+  "Punjab": mkDistricts("Punjab", ["Amritsar","Barnala","Bathinda","Faridkot","Fatehgarh Sahib","Fazilka","Ferozepur","Gurdaspur","Hoshiarpur","Jalandhar","Kapurthala","Ludhiana","Malerkotla","Mansa","Moga","Sri Muktsar Sahib","Pathankot","Patiala","Rupnagar","SAS Nagar (Mohali)","Sangrur","Shahid Bhagat Singh Nagar","Tarn Taran"]),
+  "Rajasthan": mkDistricts("Rajasthan", ["Ajmer","Alwar","Banswara","Baran","Barmer","Bharatpur","Bhilwara","Bikaner","Bundi","Chittorgarh","Churu","Dausa","Dholpur","Dungarpur","Hanumangarh","Jaipur","Jaisalmer","Jalore","Jhalawar","Jhunjhunu","Jodhpur","Karauli","Kota","Nagaur","Pali","Pratapgarh","Rajsamand","Sawai Madhopur","Sikar","Sirohi","Sri Ganganagar","Tonk","Udaipur","Balotra","Beawar","Deeg","Didwana-Kuchaman","Kotputli-Behror","Khairthal-Tijara","Phalodi","Salumbar"]),
+  "Tamil Nadu": mkDistricts("Tamil Nadu", ["Ariyalur","Chengalpattu","Chennai","Coimbatore","Cuddalore","Dharmapuri","Dindigul","Erode","Kallakurichi","Kanchipuram","Kanyakumari","Karur","Krishnagiri","Madurai","Mayiladuthurai","Nagapattinam","Namakkal","Nilgiris","Perambalur","Pudukkottai","Ramanathapuram","Ranipet","Salem","Sivaganga","Tenkasi","Thanjavur","Theni","Thoothukudi","Tiruchirappalli","Tirunelveli","Tirupathur","Tiruppur","Tiruvallur","Tiruvannamalai","Tiruvarur","Vellore","Viluppuram","Virudhunagar"]),
+  "Telangana": mkDistricts("Telangana", ["Adilabad","Bhadradri Kothagudem","Hyderabad","Jagtial","Jangaon","Jayashankar Bhupalpally","Jogulamba Gadwal","Kamareddy","Karimnagar","Khammam","Komaram Bheem Asifabad","Mahabubabad","Mahabubnagar","Mancherial","Medak","Medchal-Malkajgiri","Mulugu","Nagarkurnool","Nalgonda","Narayanpet","Nirmal","Nizamabad","Peddapalli","Rajanna Sircilla","Rangareddy","Sangareddy","Siddipet","Suryapet","Vikarabad","Wanaparthy","Warangal Rural","Hanamkonda","Yadadri Bhuvanagiri"]),
+  "Tripura": mkDistricts("Tripura", ["Dhalai","Gomati","Khowai","North Tripura","Sepahijala","South Tripura","Unakoti","West Tripura"]),
+  "Uttar Pradesh": mkDistricts("Uttar Pradesh", ["Agra","Aligarh","Ambedkar Nagar","Amethi","Amroha","Auraiya","Ayodhya","Azamgarh","Baghpat","Bahraich","Ballia","Balrampur","Banda","Barabanki","Bareilly","Basti","Bhadohi","Bijnor","Budaun","Bulandshahr","Chandauli","Chitrakoot","Deoria","Etah","Etawah","Farrukhabad","Fatehpur","Firozabad","Gautam Buddha Nagar","Ghaziabad","Ghazipur","Gonda","Gorakhpur","Hamirpur","Hapur","Hardoi","Hathras","Jalaun","Jaunpur","Jhansi","Kannauj","Kanpur Dehat","Kanpur Nagar","Kasganj","Kaushambi","Lakhimpur Kheri","Kushinagar","Lalitpur","Lucknow","Maharajganj","Mahoba","Mainpuri","Mathura","Mau","Meerut","Mirzapur","Moradabad","Muzaffarnagar","Pilibhit","Pratapgarh","Prayagraj","Raebareli","Rampur","Saharanpur","Sambhal","Sant Kabir Nagar","Shahjahanpur","Shamli","Shrawasti","Siddharthnagar","Sitapur","Sonbhadra","Sultanpur","Unnao","Varanasi"]),
+  "Uttarakhand": mkDistricts("Uttarakhand", ["Almora","Bageshwar","Chamoli","Champawat","Dehradun","Haridwar","Nainital","Pauri Garhwal","Pithoragarh","Rudraprayag","Tehri Garhwal","Udham Singh Nagar","Uttarkashi"]),
+  "West Bengal": mkDistricts("West Bengal", ["Alipurduar","Bankura","Birbhum","Cooch Behar","Dakshin Dinajpur","Darjeeling","Hooghly","Howrah","Jalpaiguri","Jhargram","Kalimpong","Kolkata","Malda","Murshidabad","Nadia","North 24 Parganas","Paschim Bardhaman","Paschim Medinipur","Purba Bardhaman","Purba Medinipur","Purulia","South 24 Parganas","Uttar Dinajpur"]),
+  "Delhi (NCT)": mkDistricts("Delhi (NCT)", ["Central Delhi","East Delhi","New Delhi","North Delhi","North East Delhi","North West Delhi","Shahdara","South Delhi","South East Delhi","South West Delhi","West Delhi"]),
+  "Jammu & Kashmir": mkDistricts("Jammu & Kashmir", ["Anantnag","Bandipora","Baramulla","Budgam","Doda","Ganderbal","Jammu","Kathua","Kishtwar","Kulgam","Kupwara","Poonch","Pulwama","Rajouri","Ramban","Reasi","Samba","Shopian","Srinagar","Udhampur"]),
+  "Chandigarh": mkDistricts("Chandigarh", ["Chandigarh"]),
+  "Puducherry": mkDistricts("Puducherry", ["Puducherry","Karaikal","Mahe","Yanam"]),
+};
+
+const DEFECT_TYPES = ["Rail Crack","Track Misalignment","Track Bending","Surface Defect","Other Abnormality"];
+const TRACK_LETTERS = ["A","B","C","D","E"];
+
+function seedFromString(s){
+  let h = 0;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return h;
+}
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function getTracks(start, end){
+  const rng = mulberry32(seedFromString(start+"|"+end));
+  const count = 4 + Math.floor(rng()*2);
+  const tracks = [];
+  for(let i=0;i<count;i++){
+    const defectCount = Math.floor(rng()*6);
+    let status = "good";
+    if(defectCount >= 4) status = "critical";
+    else if(defectCount >= 2) status = "attention";
+    const daysAgo = Math.floor(rng()*5);
+    tracks.push({
+      id: TRACK_LETTERS[i],
+      name: "Track " + TRACK_LETTERS[i],
+      status,
+      defectCount,
+      lastInspection: relativeDate(daysAgo),
+      healthScore: Math.max(40, 100 - defectCount*13 - Math.floor(rng()*10))
+    });
+  }
+  return tracks;
+}
+
+function getDefects(start, end, trackId){
+  const rng = mulberry32(seedFromString(start+"|"+end+"|"+trackId));
+  const track = getTracks(start,end).find(t=>t.id===trackId);
+  const n = track ? track.defectCount : 0;
+  const defects = [];
+  const statuses = ["Open","Monitoring","Resolved"];
+  for(let i=0;i<n;i++){
+    const type = DEFECT_TYPES[Math.floor(rng()*DEFECT_TYPES.length)];
+    const sevRoll = rng();
+    const severity = sevRoll > 0.7 ? "High" : sevRoll > 0.35 ? "Medium" : "Low";
+    const pct = 8 + (i/(Math.max(n-1,1))) * 84 + (rng()*6-3);
+    defects.push({
+      id: "DEF-" + String(100+i*7+seedFromString(trackId)%9).slice(0,3),
+      type,
+      severity,
+      lat: (13.0827 - rng()*1.1).toFixed(4),
+      lng: (80.2707 - rng()*2.0).toFixed(4),
+      date: relativeDateTime(Math.floor(rng()*6)),
+      vehicleId: "INS-" + (200+Math.floor(rng()*90)),
+      status: statuses[Math.floor(rng()*statuses.length)],
+      posPct: Math.min(94,Math.max(6,pct))
+    });
+  }
+  return defects.sort((a,b)=>a.posPct-b.posPct);
+}
+
+function relativeDate(daysAgo){
+  const d = new Date(); d.setDate(d.getDate()-daysAgo);
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+function relativeDateTime(daysAgo){
+  const d = new Date(); d.setDate(d.getDate()-daysAgo);
+  d.setHours(6+Math.floor(Math.random()*12), Math.floor(Math.random()*60));
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) + ", " +
+         d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+/* =========================================================
+   APP STATE + RENDER
+========================================================= */
+const state = {
+  screen: "route",
+  stateName: "",
+  start: "",
+  end: "",
+  trackId: null,
+  severityFilter: "All",
+  typeFilter: "All",
+  activeDefect: null
+};
+
+const app = document.getElementById("app");
+
+function render(){
+  if(state.screen === "route") renderRouteScreen();
+  else if(state.screen === "tracks") renderTracksScreen();
+  else if(state.screen === "detail") renderDetailScreen();
+}
+
+function stateOptions(selected){
+  return Object.keys(STATE_DISTRICTS).map(name=>
+    `<option value="${name}" ${name===selected?'selected':''}>${name}</option>`
+  ).join("");
+}
+
+function districtOptions(stateName, selected){
+  const districts = STATE_DISTRICTS[stateName] || [];
+  return districts.map(d=>
+    `<option value="${d.name}" ${d.name===selected?'selected':''}>${d.name}</option>`
+  ).join("");
+}
+
+function renderRouteScreen(){
+  app.innerHTML = `
+    <div class="hero">
+      <h1>Find your railway track</h1>
+      <p>Select a state, then choose the start and end districts to view monitored railway tracks along that route.</p>
+    </div>
+    <div class="route-form">
+      <div class="field" style="margin-bottom:16px;">
+        <label>State</label>
+        <select id="stateSel">
+          <option value="">Select state</option>
+          ${stateOptions(state.stateName)}
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Start District</label>
+          <select id="startSel" ${state.stateName ? "" : "disabled"}>
+            <option value="">Select district</option>
+            ${districtOptions(state.stateName, state.start)}
+          </select>
+        </div>
+        <div class="swap-icon" id="swapBtn" title="Swap">&#8646;</div>
+        <div class="field">
+          <label>End District</label>
+          <select id="endSel" ${state.stateName ? "" : "disabled"}>
+            <option value="">Select district</option>
+            ${districtOptions(state.stateName, state.end)}
+          </select>
+        </div>
+      </div>
+      <button class="find-btn" id="findBtn">Find Tracks</button>
+      <div class="form-error" id="formError" style="display:none;">Please choose two different districts.</div>
+    </div>
+  `;
+
+  document.getElementById("stateSel").onchange = e => {
+    state.stateName = e.target.value;
+    state.start = "";
+    state.end = "";
+    render();
+  };
+  document.getElementById("startSel").onchange = e => state.start = e.target.value;
+  document.getElementById("endSel").onchange = e => state.end = e.target.value;
+  document.getElementById("swapBtn").onclick = () => {
+    const t = state.start; state.start = state.end; state.end = t;
+    render();
+  };
+  document.getElementById("findBtn").onclick = () => {
+    const err = document.getElementById("formError");
+    if(!state.stateName || !state.start || !state.end || state.start === state.end){
+      err.style.display = "block";
+      return;
+    }
+    state.screen = "tracks";
+    render();
+  };
+}
+
+function renderTracksScreen(){
+  const tracks = getTracks(state.start, state.end);
+  const totalDefects = tracks.reduce((a,t)=>a+t.defectCount,0);
+  const attention = tracks.filter(t=>t.status!=="good").length;
+  const critical = tracks.filter(t=>t.status==="critical").length;
+
+  app.innerHTML = `
+    <button class="back-link" id="backBtn">&#8592; Change route</button>
+    <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;font-size:11px;">${state.stateName}</div>
+    <div class="route-heading">${state.start}<span class="arrow">&#8594;</span>${state.end}</div>
+    <div class="route-sub">${tracks.length} tracks found on this route</div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">${tracks.length}</div><div class="lbl">Total tracks</div></div>
+      <div class="stat-card"><div class="num">${totalDefects}</div><div class="lbl">Total defects</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--red)">${critical}</div><div class="lbl">Critical tracks</div></div>
+      <div class="stat-card"><div class="num" style="color:#946118">${attention}</div><div class="lbl">Need attention</div></div>
+    </div>
+
+    <div class="track-grid">
+      ${tracks.map(t=>trackCardHTML(t)).join("")}
+    </div>
+  `;
+
+  document.getElementById("backBtn").onclick = () => { state.screen = "route"; render(); };
+  tracks.forEach(t=>{
+    document.getElementById("card-"+t.id).onclick = () => {
+      state.trackId = t.id;
+      state.severityFilter = "All";
+      state.typeFilter = "All";
+      state.activeDefect = null;
+      state.screen = "detail";
+      render();
+    };
+  });
+}
+
+function trackCardHTML(t){
+  const ledColor = t.status==="good" ? "var(--green)" : t.status==="attention" ? "var(--amber)" : "var(--red)";
+  const badgeClass = t.status;
+  const badgeLabel = t.status==="good" ? "Healthy" : t.status==="attention" ? "Attention Required" : "Critical";
+  return `
+    <div class="track-card" id="card-${t.id}">
+      <div class="track-card-top">
+        <div class="track-name">${t.name}</div>
+        <div class="led" style="background:${ledColor}"></div>
+      </div>
+      <span class="badge ${badgeClass}">${badgeLabel}</span>
+      <div class="track-meta">
+        <div><span class="val">${t.defectCount}</span>Defects</div>
+        <div><span class="val">${t.healthScore}%</span>Health</div>
+        <div><span class="val mono" style="font-size:12px">${t.lastInspection}</span>Inspected</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDetailScreen(){
+  const track = getTracks(state.start, state.end).find(t=>t.id===state.trackId);
+  let defects = getDefects(state.start, state.end, state.trackId);
+
+  if(state.severityFilter !== "All") defects = defects.filter(d=>d.severity===state.severityFilter);
+  if(state.typeFilter !== "All") defects = defects.filter(d=>d.type===state.typeFilter);
+
+  const allDefects = getDefects(state.start, state.end, state.trackId);
+  const highCount = allDefects.filter(d=>d.severity==="High").length;
+
+  app.innerHTML = `
+    <button class="back-link" id="backBtn">&#8592; Back to tracks</button>
+    <div class="detail-top">
+      <div>
+        <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;font-size:11px;">${state.stateName}</div>
+        <div class="route-heading">${state.start}<span class="arrow">&#8594;</span>${state.end}</div>
+        <div class="route-sub">${track.name} &middot; ${allDefects.length} defects detected &middot; last inspected ${track.lastInspection}</div>
+      </div>
+      <div class="filters">
+        <select id="sevFilter">
+          <option value="All">All severities</option>
+          <option value="High" ${state.severityFilter==="High"?"selected":""}>High</option>
+          <option value="Medium" ${state.severityFilter==="Medium"?"selected":""}>Medium</option>
+          <option value="Low" ${state.severityFilter==="Low"?"selected":""}>Low</option>
+        </select>
+        <select id="typeFilter">
+          <option value="All">All defect types</option>
+          ${DEFECT_TYPES.map(t=>`<option value="${t}" ${state.typeFilter===t?"selected":""}>${t}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">${allDefects.length}</div><div class="lbl">Total defects</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--red)">${highCount}</div><div class="lbl">High severity</div></div>
+      <div class="stat-card"><div class="num">${track.healthScore}%</div><div class="lbl">Health score</div></div>
+      <div class="stat-card"><div class="num" style="font-size:15px;padding-top:4px">${track.lastInspection}</div><div class="lbl">Last inspection</div></div>
+    </div>
+
+    <div class="map-panel">
+      <div class="map-panel-title">Track map &middot; OpenStreetMap &middot; click a marker for details</div>
+      <div class="track-map" id="trackMap"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:red"></span>Detected railway issue</span>
+        <span><span class="sw" style="background:#ff6600;border-radius:2px;width:14px;height:4px"></span>Railway route</span>
+      </div>
+    </div>
+
+    <div class="sensor-panel" id="sensorPanel">
+      <div class="sensor-panel-title">Live sensor data · MongoDB / app.py</div>
+      <div class="empty-note">Loading database sensor data...</div>
+    </div>
+
+    ${defects.length ? `
+    <table class="defect-table">
+      <thead><tr>
+        <th>Defect ID</th><th>Type</th><th>Severity</th><th>Coordinates</th><th>Detected</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${defects.map(d=>`
+          <tr id="row-${d.id}">
+            <td class="mono">${d.id}</td>
+            <td>${d.type}</td>
+            <td><span class="sev-dot ${d.severity.toLowerCase()}"></span>${d.severity}</td>
+            <td class="mono" style="font-size:12px">${d.lat}, ${d.lng}</td>
+            <td>${d.date}</td>
+            <td><span class="status-pill ${d.status.toLowerCase()}">${d.status}</span></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    ` : `<div class="empty-note">No defects match the selected filters.</div>`}
+  `;
+
+  document.getElementById("backBtn").onclick = () => {
+    destroyTrackMap();
+    state.mapView = null;
+    state.screen = "tracks";
+    render();
+  };
+  document.getElementById("sevFilter").onchange = e => { state.severityFilter = e.target.value; state.activeDefect=null; render(); };
+  document.getElementById("typeFilter").onchange = e => { state.typeFilter = e.target.value; state.activeDefect=null; render(); };
+
+  defects.forEach(d=>{
+    const row = document.getElementById("row-"+d.id);
+    if(row) row.onclick = () => { state.activeDefect = state.activeDefect===d.id ? null : d.id; render(); };
+  });
+
+  if(state.activeDefect){
+    const r = document.getElementById("row-"+state.activeDefect);
+    if(r) r.classList.add("active-row");
+  }
+
+  initTrackMap(state.stateName, state.start, state.end, defects);
+  renderSensorPanel();
+  loadSensorData();
+}
+
+function escapeHTML(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+
+function latestSensorRecord(){
+  return sensorData.length ? sensorData[0] : null;
+}
+
+function sensorValue(record, key){
+  if(!record) return null;
+  if(record[key] !== undefined && record[key] !== null) return record[key];
+  return null;
+}
+
+function nestedSensorValues(record, prefix){
+  return Object.entries(record || {}).filter(([k,v]) =>
+    k.toLowerCase().startsWith(prefix) && v !== null && v !== undefined && typeof v !== "object"
+  );
+}
+
+function renderSensorPanel(){
+  const panel = document.getElementById("sensorPanel");
+  if(!panel) return;
+
+  if(!sensorDataLoaded){
+    panel.innerHTML = '<div class="sensor-panel-title">Live sensor data · MongoDB / app.py</div><div class="empty-note">Loading database sensor data...</div>';
+    return;
+  }
+
+  if(!sensorData.length){
+    panel.innerHTML = '<div class="sensor-panel-title">Live sensor data · MongoDB / app.py</div><div class="empty-note">No sensor data found in the database.</div>';
+    return;
+  }
+
+  const latest = latestSensorRecord();
+  const temperature = sensorValue(latest,"temperature");
+  const status = sensorValue(latest,"overall_status");
+  const device = sensorValue(latest,"device_id");
+  const timestamp = sensorValue(latest,"timestamp");
+  const lat = sensorValue(latest,"location_latitude");
+  const lng = sensorValue(latest,"location_longitude");
+
+  const fields = Object.entries(latest).filter(([k,v]) =>
+    v !== null && v !== undefined && typeof v !== "object" && !["_id","temperature","overall_status","device_id","timestamp","location_latitude","location_longitude"].includes(k)
+  );
+
+  panel.innerHTML = `
+    <div class="sensor-panel-title">Live sensor data · MongoDB / app.py</div>
+    <div class="sensor-grid">
+      <div class="sensor-value"><div class="k">Temperature</div><div class="v">${temperature === null ? "N/A" : escapeHTML(temperature) + " °C"}</div></div>
+      <div class="sensor-value"><div class="k">Track status</div><div class="v">${escapeHTML(status ?? "N/A")}</div></div>
+      <div class="sensor-value"><div class="k">Device</div><div class="v">${escapeHTML(device ?? "N/A")}</div></div>
+      <div class="sensor-value"><div class="k">Timestamp</div><div class="v">${escapeHTML(timestamp ?? "N/A")}</div></div>
+    </div>
+    <div class="sensor-subgrid">
+      <div class="sensor-value"><div class="k">Location latitude</div><div class="v">${escapeHTML(lat ?? "N/A")}</div></div>
+      <div class="sensor-value"><div class="k">Location longitude</div><div class="v">${escapeHTML(lng ?? "N/A")}</div></div>
+      <div class="sensor-value"><div class="k">Database records loaded</div><div class="v">${sensorData.length}</div></div>
+    </div>
+    ${fields.length ? `
+      <div class="sensor-table-wrap">
+        <table class="sensor-table">
+          <thead><tr><th>Sensor field</th><th>Value</th></tr></thead>
+          <tbody>${fields.map(([k,v])=>`<tr><td class="mono">${escapeHTML(k)}</td><td>${escapeHTML(v)}</td></tr>`).join("")}</tbody>
+        </table>
+      </div>` : ""}
+    <div class="sensor-table-wrap">
+      <table class="sensor-table">
+        <thead><tr><th>Timestamp</th><th>Temperature</th><th>Status</th><th>Latitude</th><th>Longitude</th></tr></thead>
+        <tbody>${sensorData.slice(0,50).map(r=>`<tr>
+          <td>${escapeHTML(r.timestamp ?? "")}</td>
+          <td>${escapeHTML(r.temperature ?? "")}</td>
+          <td>${escapeHTML(r.overall_status ?? "")}</td>
+          <td>${escapeHTML(r.location_latitude ?? "")}</td>
+          <td>${escapeHTML(r.location_longitude ?? "")}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+
+async function loadSensorData(){
+  try{
+    // Updated endpoint to explicitly target the FastAPI backend running on port 8000
+    const response = await fetch("http://localhost:8000/api/data", {cache:"no-store"});
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    sensorData = Array.isArray(payload) ? payload : (payload.data || []);
+    sensorDataLoaded = true;
+  }catch(error){
+    console.error("Unable to load MongoDB sensor data:", error);
+    sensorData = [];
+    sensorDataLoaded = true;
+  }
+  renderSensorPanel();
+  addDatabaseLocationMarkers();
+}
+
+function addDatabaseLocationMarkers(){
+  if(!trackMap || !Array.isArray(sensorData)) return;
+  sensorData.forEach((r)=>{
+    const lat = Number(r.location_latitude);
+    const lng = Number(r.location_longitude);
+    if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const el = document.createElement("div");
+    el.className = "sensor-map-marker";
+    const popup = new maplibregl.Popup({offset:12}).setHTML(`
+      <div class="popup">
+        <h3>📍 Database Sensor Location</h3>
+        <p><strong>Latitude:</strong> ${escapeHTML(lat)}</p>
+        <p><strong>Longitude:</strong> ${escapeHTML(lng)}</p>
+        <p><strong>Temperature:</strong> ${escapeHTML(r.temperature ?? "N/A")}</p>
+        <p><strong>Status:</strong> ${escapeHTML(r.overall_status ?? "N/A")}</p>
+        <p><strong>Timestamp:</strong> ${escapeHTML(r.timestamp ?? "N/A")}</p>
+      </div>`);
+    new maplibregl.Marker({element:el}).setLngLat([lng,lat]).setPopup(popup).addTo(trackMap);
+  });
+}
+
+function popupHTML(d){
+  return `
+    <div class="popup">
+      <h3>🚨 Railway Issue</h3>
+      <p><strong>Defect ID:</strong> ${d.id}</p>
+      <p><strong>Type:</strong> ${d.type}</p>
+      <p><strong>Severity:</strong> ${d.severity}</p>
+      <p><strong>Latitude:</strong> ${d.lat}</p>
+      <p><strong>Longitude:</strong> ${d.lng}</p>
+      <p><strong>Detected:</strong> ${d.date}</p>
+      <p><strong>Vehicle:</strong> ${d.vehicleId}</p>
+      <p><strong>Status:</strong> ${d.status}</p>
+    </div>
+  `;
+}
+
+function scrollToRow(id){
+  setTimeout(()=>{
+    const r = document.getElementById("row-"+id);
+    if(r) r.scrollIntoView({behavior:"smooth", block:"center"});
+  },0);
+}
+
+/* =========================================================
+   TRACK MAP — MapLibre GL, OpenStreetMap
+========================================================= */
+let trackMap = null;
+let trackMapKey = null;
+let sensorData = [];
+let sensorDataLoaded = false;
+
+function destroyTrackMap(){
+  if(trackMap){ trackMap.remove(); trackMap = null; }
+}
+
+function initTrackMap(stateName, start, end, defects){
+  const container = document.getElementById("trackMap");
+  if(!container || typeof maplibregl === "undefined") return;
+
+  const key = stateName + "|" + start + "|" + end + "|" + state.trackId;
+  if(key !== trackMapKey){ state.mapView = null; trackMapKey = key; }
+
+  const startCoord = districtCoord(stateName, start);
+  const endCoord = districtCoord(stateName, end);
+
+  destroyTrackMap();
+
+  trackMap = new maplibregl.Map({
+    container: "trackMap",
+    style: "https://tiles.openfreemap.org/styles/bright",
+    center: state.mapView ? state.mapView.center : [(startCoord.lng+endCoord.lng)/2, (startCoord.lat+endCoord.lat)/2],
+    zoom: state.mapView ? state.mapView.zoom : 8,
+    pitch: state.mapView ? state.mapView.pitch : 0,
+    bearing: state.mapView ? state.mapView.bearing : 0,
+    attributionControl: { compact: true }
+  });
+
+  trackMap.addControl(new maplibregl.NavigationControl(), "top-right");
+
+  trackMap.on("moveend", () => {
+    if(!trackMap) return;
+    state.mapView = {
+      center: trackMap.getCenter(),
+      zoom: trackMap.getZoom(),
+      pitch: trackMap.getPitch(),
+      bearing: trackMap.getBearing()
+    };
+  });
+
+  addStationMarker(startCoord, start);
+  addStationMarker(endCoord, end);
+  defects.forEach((d,i)=> addDefectMarker(d, i));
+
+  const routeCoords = [
+    [startCoord.lng, startCoord.lat],
+    ...defects.map(d => [+d.lng, +d.lat]),
+    [endCoord.lng, endCoord.lat]
+  ];
+  drawRailwayRoute(routeCoords);
+
+  if(!state.mapView){
+    trackMap.on("load", () => {
+      const bounds = new maplibregl.LngLatBounds();
+      routeCoords.forEach(c => bounds.extend(c));
+      trackMap.fitBounds(bounds, { padding: 70, pitch: 0, duration: 0 });
+    });
+  }
+}
+
+function drawRailwayRoute(coordinates){
+  const sourceId = "railway-route";
+
+  const geojson = {
+    type: "Feature",
+    geometry: { type: "LineString", coordinates },
+    properties: {}
+  };
+
+  const draw = () => {
+    if(!trackMap) return;
+    if(trackMap.getSource(sourceId)){
+      trackMap.getSource(sourceId).setData(geojson);
+      return;
+    }
+    trackMap.addSource(sourceId, { type: "geojson", data: geojson });
+    trackMap.addLayer({
+      id: "railway-route-line",
+      type: "line",
+      source: sourceId,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ff6600", "line-width": 5, "line-opacity": 0.9 }
+    });
+  };
+
+  if(trackMap.isStyleLoaded()) draw();
+  else trackMap.once("load", draw);
+}
+
+function addStationMarker(coord, label){
+  const el = document.createElement("div");
+  el.className = "mgl-station-marker";
+  el.innerHTML = `<div class="lbl">${label}</div><div class="sq"></div>`;
+  new maplibregl.Marker({ element: el, anchor: "bottom" })
+    .setLngLat([coord.lng, coord.lat])
+    .addTo(trackMap);
+}
+
+function addDefectMarker(d, i){
+  const isActive = state.activeDefect === d.id;
+  const el = document.createElement("div");
+  el.className = `mgl-defect-marker ${isActive ? "active" : ""}`;
+  el.title = d.id;
+
+  const popup = new maplibregl.Popup({ offset: 18, closeButton: true, closeOnClick: true }).setHTML(popupHTML(d));
+
+  const marker = new maplibregl.Marker({ element: el })
+    .setLngLat([+d.lng, +d.lat])
+    .setPopup(popup)
+    .addTo(trackMap);
+
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    state.activeDefect = state.activeDefect === d.id ? null : d.id;
+    render();
+    scrollToRow(d.id);
+  });
+
+  if(isActive) marker.togglePopup();
+}
+
+render();
+</script>
+</body>
+</html>
