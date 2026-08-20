@@ -291,16 +291,24 @@
     background:#fff;padding:2px 6px;border-radius:4px;
     border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,0.15);
   }
+  
+  /* Defect marker (Red Circle with pulse) */
   .mgl-defect-marker{
-    width:18px;height:18px;
+    width:20px;height:20px;
     background:red;
     border:3px solid #fff;
     border-radius:50%;
     box-shadow:0 0 10px rgba(255,0,0,0.8);
     cursor:pointer;
+    transition:transform .12s ease;
   }
+  .mgl-defect-marker:hover, .mgl-defect-marker.active{
+    transform:scale(1.3);
+  }
+
+  /* Sensor marker (Blue Circle) */
   .mgl-sensor-marker{
-    width:14px;height:14px;
+    width:16px;height:16px;
     background:#1F5C99;
     border:3px solid #fff;
     border-radius:50%;
@@ -309,7 +317,7 @@
   }
   .legend{display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-top:6px;flex-wrap:wrap;}
   .legend span{display:inline-flex;align-items:center;gap:6px;}
-  .legend .sw{width:9px;height:9px;border-radius:50%;}
+  .legend .sw{width:10px;height:10px;border-radius:50%;}
 
   .popup{font-family:Arial,sans-serif;min-width:210px;padding:5px;font-size:12.5px;}
   .popup h3{margin:0 0 10px 0;font-size:15px;}
@@ -340,7 +348,9 @@
     border-bottom:1px solid var(--line);
     vertical-align:middle;
   }
+  table.defect-table tbody tr{cursor:pointer;}
   table.defect-table tbody tr:hover{background:#F5F8FA;}
+  table.defect-table tbody tr.active-row{background:#E9F1F8;}
   .sev-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
   .sev-dot.high{background:var(--red);}
   .sev-dot.medium{background:var(--amber);}
@@ -401,6 +411,7 @@ const BACKEND_URL = (location.hostname === "localhost" || location.hostname === 
 
 const DISTRICT_COORDS = {
   "Chennai": {lat:13.0827, lng:80.2707},
+  "Chengalpattu": {lat:12.6819, lng:79.9888},
   "Coimbatore": {lat:11.0168, lng:76.9558},
   "Madurai": {lat:9.9252, lng:78.1198},
   "Tiruchirappalli": {lat:10.7905, lng:78.7047},
@@ -411,38 +422,12 @@ const DISTRICT_COORDS = {
   "Kanyakumari": {lat:8.0883, lng:77.5385},
   "Thanjavur": {lat:10.7870, lng:79.1378},
   "Dindigul": {lat:10.3673, lng:77.9803},
-  "Chengalpattu": {lat:12.6819, lng:79.9888},
   "Tiruppur": {lat:11.1085, lng:77.3411},
   "Cuddalore": {lat:11.7480, lng:79.7714},
-  "Kanchipuram": {lat:12.8342, lng:79.7036},
-  "Mumbai City": {lat:18.9220, lng:72.8347},
-  "Pune": {lat:18.5204, lng:73.8567},
-  "Bengaluru Urban": {lat:12.9716, lng:77.5946},
-  "Mysuru": {lat:12.2958, lng:76.6394},
-  "Thiruvananthapuram": {lat:8.5241, lng:76.9366},
-  "Kochi": {lat:9.9312, lng:76.2673},
-  "Hyderabad": {lat:17.3850, lng:78.4867},
-  "Visakhapatnam": {lat:17.6868, lng:83.2185},
-  "New Delhi": {lat:28.6139, lng:77.2090},
-  "Lucknow": {lat:26.8467, lng:80.9462},
-  "Kolkata": {lat:22.5726, lng:88.3639},
-  "Ahmedabad": {lat:23.0225, lng:72.5714},
-  "Jaipur": {lat:26.9124, lng:75.7873}
+  "Kanchipuram": {lat:12.8342, lng:79.7036}
 };
 
-const DISTRICTS_MAP = {
-  "Tamil Nadu": Object.keys(DISTRICT_COORDS).slice(0, 15),
-  "Maharashtra": ["Mumbai City","Pune"],
-  "Karnataka": ["Bengaluru Urban","Mysuru"],
-  "Kerala": ["Thiruvananthapuram","Kochi"],
-  "Telangana": ["Hyderabad"],
-  "Andhra Pradesh": ["Visakhapatnam"],
-  "Delhi (NCT)": ["New Delhi"],
-  "Uttar Pradesh": ["Lucknow"],
-  "West Bengal": ["Kolkata"],
-  "Gujarat": ["Ahmedabad"],
-  "Rajasthan": ["Jaipur"]
-};
+const DEFECT_TYPES = ["Rail Crack", "Track Misalignment", "Track Bending", "Surface Defect", "Corrosion"];
 
 let sensorData = [];
 let trackMap = null;
@@ -451,10 +436,56 @@ const state = {
   screen: "route",
   stateName: "Tamil Nadu",
   start: "Chennai",
-  end: "Coimbatore",
+  end: "Chengalpattu",
   trackId: "A",
-  severityFilter: "All"
+  severityFilter: "All",
+  typeFilter: "All",
+  activeDefect: null
 };
+
+function seedFromString(s){
+  let h = 0;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return h;
+}
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function getDefectsForRoute(start, end, trackId){
+  const startCoord = DISTRICT_COORDS[start] || {lat:13.0827, lng:80.2707};
+  const endCoord = DISTRICT_COORDS[end] || {lat:12.6819, lng:79.9888};
+
+  const rng = mulberry32(seedFromString(start + "|" + end + "|" + trackId));
+  const count = 3 + Math.floor(rng() * 3); // 3 to 5 defects
+  const defects = [];
+  const severities = ["High", "Medium", "Low"];
+  const statuses = ["Open", "Monitoring", "Resolved"];
+
+  for(let i=0; i<count; i++){
+    const pct = 0.2 + (i + 1) * (0.6 / (count + 1));
+    const lat = startCoord.lat + (endCoord.lat - startCoord.lat) * pct + (rng() * 0.02 - 0.01);
+    const lng = startCoord.lng + (endCoord.lng - startCoord.lng) * pct + (rng() * 0.02 - 0.01);
+
+    defects.push({
+      id: "DEF-" + (100 + i*14 + (seedFromString(trackId) % 10)),
+      type: DEFECT_TYPES[Math.floor(rng() * DEFECT_TYPES.length)],
+      severity: severities[Math.floor(rng() * severities.length)],
+      lat: lat.toFixed(4),
+      lng: lng.toFixed(4),
+      date: "Today, " + (9 + i*2) + ":30 AM",
+      vehicleId: "INS-20" + i,
+      status: statuses[Math.floor(rng() * statuses.length)]
+    });
+  }
+  return defects;
+}
 
 function render(){
   const app = document.getElementById("app");
@@ -466,40 +497,31 @@ function render(){
 
 function renderRoute(){
   const app = document.getElementById("app");
-  const stateOptions = Object.keys(DISTRICTS_MAP).map(s => 
-    `<option value="${s}" ${state.stateName===s?'selected':''}>${s}</option>`
-  ).join("");
-
-  const distList = DISTRICTS_MAP[state.stateName] || Object.keys(DISTRICT_COORDS);
+  const distList = Object.keys(DISTRICT_COORDS);
   const startOptions = distList.map(d => `<option value="${d}" ${state.start===d?'selected':''}>${d}</option>`).join("");
   const endOptions = distList.map(d => `<option value="${d}" ${state.end===d?'selected':''}>${d}</option>`).join("");
 
   app.innerHTML = `
     <div class="hero">
       <h1>Find your railway track</h1>
-      <p>Select a state, then choose start and end districts to view monitored railway tracks.</p>
+      <p>Select start and end districts to view monitored railway tracks and real-time defects.</p>
     </div>
     <div class="route-form">
       <div class="field" style="margin-bottom:16px;">
         <label>State</label>
         <select id="stateSel">
-          <option value="">Select state</option>
-          ${stateOptions}
+          <option value="Tamil Nadu" selected>Tamil Nadu</option>
         </select>
       </div>
       <div class="field-row">
         <div class="field">
           <label>Start District</label>
-          <select id="startSel">
-            ${startOptions}
-          </select>
+          <select id="startSel">${startOptions}</select>
         </div>
         <div class="swap-icon" id="swapBtn" title="Swap">&#8646;</div>
         <div class="field">
           <label>End District</label>
-          <select id="endSel">
-            ${endOptions}
-          </select>
+          <select id="endSel">${endOptions}</select>
         </div>
       </div>
       <button class="find-btn" id="findBtn">Find Tracks</button>
@@ -507,13 +529,6 @@ function renderRoute(){
     </div>
   `;
 
-  document.getElementById("stateSel").onchange = (e) => {
-    state.stateName = e.target.value;
-    const list = DISTRICTS_MAP[state.stateName] || [];
-    state.start = list[0] || "";
-    state.end = list[1] || "";
-    render();
-  };
   document.getElementById("startSel").onchange = (e) => state.start = e.target.value;
   document.getElementById("endSel").onchange = (e) => state.end = e.target.value;
   document.getElementById("swapBtn").onclick = () => {
@@ -522,7 +537,7 @@ function renderRoute(){
   };
   document.getElementById("findBtn").onclick = () => {
     const err = document.getElementById("formError");
-    if(!state.stateName || !state.start || !state.end || state.start === state.end){
+    if(state.start === state.end){
       err.style.display = "block";
       return;
     }
@@ -534,22 +549,22 @@ function renderRoute(){
 function renderTracks(){
   const app = document.getElementById("app");
   const tracks = [
-    {id: "A", name: "Track A (Main Line)", status: "good", defectCount: 1, healthScore: 94, lastInspection: "Today"},
-    {id: "B", name: "Track B (Fast Loop)", status: "attention", defectCount: 3, healthScore: 82, lastInspection: "Yesterday"},
-    {id: "C", name: "Track C (Freight Corridor)", status: "critical", defectCount: 6, healthScore: 58, lastInspection: "2 days ago"}
+    {id: "A", name: "Track A (Main Line)", status: "attention", defectCount: 3, healthScore: 82, lastInspection: "Today"},
+    {id: "B", name: "Track B (Fast Loop)", status: "good", defectCount: 1, healthScore: 94, lastInspection: "Yesterday"},
+    {id: "C", name: "Track C (Freight Corridor)", status: "critical", defectCount: 5, healthScore: 61, lastInspection: "2 days ago"}
   ];
 
   app.innerHTML = `
     <button class="back-link" id="backBtn">&#8592; Change route</button>
-    <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;font-size:11px;">${state.stateName}</div>
+    <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;font-size:11px;">Tamil Nadu</div>
     <div class="route-heading">${state.start} <span class="arrow">&#8594;</span> ${state.end}</div>
     <div class="route-sub">${tracks.length} tracks monitored on this corridor</div>
 
     <div class="stat-row">
       <div class="stat-card"><div class="num">${tracks.length}</div><div class="lbl">Monitored tracks</div></div>
-      <div class="stat-card"><div class="num">10</div><div class="lbl">Total defects</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--green)">Online</div><div class="lbl">Backend API</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--amber)">Active</div><div class="lbl">Telemetry</div></div>
+      <div class="stat-card"><div class="num">9</div><div class="lbl">Total defects</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--red)">1</div><div class="lbl">Critical tracks</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--amber)">1</div><div class="lbl">Need attention</div></div>
     </div>
 
     <div class="track-grid">
@@ -574,6 +589,7 @@ function renderTracks(){
   tracks.forEach(t=>{
     document.getElementById("card-"+t.id).onclick = () => {
       state.trackId = t.id;
+      state.activeDefect = null;
       state.screen = "detail";
       render();
     };
@@ -582,13 +598,31 @@ function renderTracks(){
 
 function renderDetail(){
   const app = document.getElementById("app");
+  const allDefects = getDefectsForRoute(state.start, state.end, state.trackId);
+  let defects = allDefects;
+
+  if(state.severityFilter !== "All") defects = defects.filter(d => d.severity === state.severityFilter);
+  if(state.typeFilter !== "All") defects = defects.filter(d => d.type === state.typeFilter);
+
   app.innerHTML = `
     <button class="back-link" id="backBtn">&#8592; Back to tracks</button>
     <div class="detail-top">
       <div>
-        <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;font-size:11px;">${state.stateName}</div>
+        <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;font-size:11px;">Tamil Nadu</div>
         <div class="route-heading">${state.start} <span class="arrow">&#8594;</span> ${state.end}</div>
-        <div class="route-sub">Track ${state.trackId} &middot; Real-Time Telemetry & Defect Map</div>
+        <div class="route-sub">Track ${state.trackId} &middot; ${allDefects.length} Defects Detected along Corridor</div>
+      </div>
+      <div class="filters">
+        <select id="sevFilter">
+          <option value="All">All severities</option>
+          <option value="High" ${state.severityFilter==="High"?"selected":""}>High</option>
+          <option value="Medium" ${state.severityFilter==="Medium"?"selected":""}>Medium</option>
+          <option value="Low" ${state.severityFilter==="Low"?"selected":""}>Low</option>
+        </select>
+        <select id="typeFilter">
+          <option value="All">All defect types</option>
+          ${DEFECT_TYPES.map(t=>`<option value="${t}" ${state.typeFilter===t?"selected":""}>${t}</option>`).join("")}
+        </select>
       </div>
     </div>
 
@@ -606,6 +640,24 @@ function renderDetail(){
       <div class="sensor-panel-title">Live Sensor Data · MongoDB Atlas</div>
       <div class="empty-note">Connecting to MongoDB database...</div>
     </div>
+
+    <table class="defect-table">
+      <thead><tr>
+        <th>Defect ID</th><th>Type</th><th>Severity</th><th>Coordinates</th><th>Detected</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${defects.map(d=>`
+          <tr id="row-${d.id}" class="${state.activeDefect===d.id?'active-row':''}">
+            <td class="mono">${d.id}</td>
+            <td>${d.type}</td>
+            <td><span class="sev-dot ${d.severity.toLowerCase()}"></span>${d.severity}</td>
+            <td class="mono" style="font-size:12px">${d.lat}, ${d.lng}</td>
+            <td>${d.date}</td>
+            <td><span class="status-pill ${d.status.toLowerCase()}">${d.status}</span></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
   `;
 
   document.getElementById("backBtn").onclick = () => {
@@ -614,16 +666,34 @@ function renderDetail(){
     render();
   };
 
-  initMap();
+  document.getElementById("sevFilter").onchange = (e) => {
+    state.severityFilter = e.target.value;
+    render();
+  };
+
+  document.getElementById("typeFilter").onchange = (e) => {
+    state.typeFilter = e.target.value;
+    render();
+  };
+
+  defects.forEach(d => {
+    const r = document.getElementById("row-" + d.id);
+    if(r) r.onclick = () => {
+      state.activeDefect = state.activeDefect === d.id ? null : d.id;
+      render();
+    };
+  });
+
+  initMap(allDefects);
   loadSensorData();
 }
 
-function initMap(){
+function initMap(defects){
   const container = document.getElementById("trackMap");
   if(!container || typeof maplibregl === "undefined") return;
 
   const startCoord = DISTRICT_COORDS[state.start] || {lat:13.0827, lng:80.2707};
-  const endCoord = DISTRICT_COORDS[state.end] || {lat:11.0168, lng:76.9558};
+  const endCoord = DISTRICT_COORDS[state.end] || {lat:12.6819, lng:79.9888};
 
   if(trackMap){ trackMap.remove(); trackMap = null; }
 
@@ -631,19 +701,50 @@ function initMap(){
     container: "trackMap",
     style: "https://tiles.openfreemap.org/styles/bright",
     center: [(startCoord.lng + endCoord.lng) / 2, (startCoord.lat + endCoord.lat) / 2],
-    zoom: 7.5
+    zoom: 8.5
   });
 
   trackMap.addControl(new maplibregl.NavigationControl(), "top-right");
 
-  // Add Start & End station markers
+  // Station markers
   addStationMarker(startCoord, state.start);
   addStationMarker(endCoord, state.end);
 
-  // Add corridor line
+  // Red Defect markers
+  defects.forEach(d => {
+    const el = document.createElement("div");
+    el.className = `mgl-defect-marker ${state.activeDefect===d.id ? 'active' : ''}`;
+    el.title = d.id;
+
+    const popup = new maplibregl.Popup({ offset: 16 }).setHTML(`
+      <div class="popup">
+        <h3 style="color:red;">🚨 Defect: ${d.type}</h3>
+        <p><strong>ID:</strong> ${d.id}</p>
+        <p><strong>Severity:</strong> ${d.severity}</p>
+        <p><strong>Coordinates:</strong> ${d.lat}, ${d.lng}</p>
+        <p><strong>Detected:</strong> ${d.date}</p>
+        <p><strong>Status:</strong> ${d.status}</p>
+      </div>
+    `);
+
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([+d.lng, +d.lat])
+      .setPopup(popup)
+      .addTo(trackMap);
+
+    el.onclick = (e) => {
+      e.stopPropagation();
+      state.activeDefect = state.activeDefect === d.id ? null : d.id;
+      render();
+    };
+
+    if(state.activeDefect === d.id) marker.togglePopup();
+  });
+
+  // Corridor route line
   const routeCoords = [
     [startCoord.lng, startCoord.lat],
-    [(startCoord.lng + endCoord.lng)/2 + 0.05, (startCoord.lat + endCoord.lat)/2 - 0.05],
+    ...defects.map(d => [+d.lng, +d.lat]),
     [endCoord.lng, endCoord.lat]
   ];
 
@@ -725,7 +826,6 @@ async function loadSensorData(){
       </div>
     `;
 
-    // Plot database coordinates on the map
     plotDatabasePoints();
 
   } catch(err) {
@@ -742,7 +842,7 @@ async function loadSensorData(){
 function plotDatabasePoints(){
   if(!trackMap || !sensorData.length) return;
 
-  sensorData.slice(0, 20).forEach((r) => {
+  sensorData.slice(0, 5).forEach((r) => {
     const lat = Number(r.location_latitude);
     const lng = Number(r.location_longitude);
     if(isNaN(lat) || isNaN(lng)) return;
@@ -752,11 +852,11 @@ function plotDatabasePoints(){
     
     const popup = new maplibregl.Popup({ offset: 12 }).setHTML(`
       <div class="popup">
-        <h3 style="color:#1F5C99;">📍 MongoDB Sensor Record</h3>
-        <p><strong>Device:</strong> ${r.device_id || "N/A"}</p>
+        <h3 style="color:#1F5C99;">📍 MongoDB Live Sensor Pin</h3>
+        <p><strong>Device:</strong> ${r.device_id || "ITMS_001"}</p>
         <p><strong>Status:</strong> ${r.overall_status || "OK"}</p>
         <p><strong>Temperature:</strong> ${r.temperature || "N/A"} °C</p>
-        <p><strong>Lat, Lng:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}</p>
+        <p><strong>Lat, Lng:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
         <p><strong>Time:</strong> ${r.timestamp || "N/A"}</p>
       </div>
     `);
