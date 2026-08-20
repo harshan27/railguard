@@ -292,19 +292,27 @@
     border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,0.15);
   }
   .mgl-defect-marker{
-    width:20px;height:20px;
+    width:18px;height:18px;
     background:red;
     border:3px solid #fff;
     border-radius:50%;
     box-shadow:0 0 10px rgba(255,0,0,0.8);
     cursor:pointer;
   }
-  .legend{display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-top:6px;}
+  .mgl-sensor-marker{
+    width:14px;height:14px;
+    background:#1F5C99;
+    border:3px solid #fff;
+    border-radius:50%;
+    box-shadow:0 0 0 2px #1F5C99, 0 1px 5px rgba(0,0,0,.35);
+    cursor:pointer;
+  }
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--ink-soft);margin-top:6px;flex-wrap:wrap;}
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .legend .sw{width:9px;height:9px;border-radius:50%;}
 
   .popup{font-family:Arial,sans-serif;min-width:210px;padding:5px;font-size:12.5px;}
-  .popup h3{margin:0 0 10px 0;color:red;font-size:15px;}
+  .popup h3{margin:0 0 10px 0;font-size:15px;}
   .popup p{margin:3px 0;}
 
   table.defect-table{
@@ -315,6 +323,7 @@
     border-radius:10px;
     overflow:hidden;
     font-size:13px;
+    margin-top:16px;
   }
   table.defect-table thead th{
     text-align:left;
@@ -383,31 +392,68 @@
 <main id="app"></main>
 
 <script>
-/* Dynamic Backend URL for Local vs Production */
+/* =========================================================
+   BACKEND CONFIGURATION
+========================================================= */
 const BACKEND_URL = (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:")
   ? "http://localhost:8000"
-  : "https://railguard-service-app.onrender.com";
+  : "https://railguard-service-b2f5.onrender.com";
+
+const DISTRICT_COORDS = {
+  "Chennai": {lat:13.0827, lng:80.2707},
+  "Coimbatore": {lat:11.0168, lng:76.9558},
+  "Madurai": {lat:9.9252, lng:78.1198},
+  "Tiruchirappalli": {lat:10.7905, lng:78.7047},
+  "Salem": {lat:11.6643, lng:78.1460},
+  "Tirunelveli": {lat:8.7139, lng:77.7567},
+  "Erode": {lat:11.3410, lng:77.7172},
+  "Vellore": {lat:12.9165, lng:79.1325},
+  "Kanyakumari": {lat:8.0883, lng:77.5385},
+  "Thanjavur": {lat:10.7870, lng:79.1378},
+  "Dindigul": {lat:10.3673, lng:77.9803},
+  "Chengalpattu": {lat:12.6819, lng:79.9888},
+  "Tiruppur": {lat:11.1085, lng:77.3411},
+  "Cuddalore": {lat:11.7480, lng:79.7714},
+  "Kanchipuram": {lat:12.8342, lng:79.7036},
+  "Mumbai City": {lat:18.9220, lng:72.8347},
+  "Pune": {lat:18.5204, lng:73.8567},
+  "Bengaluru Urban": {lat:12.9716, lng:77.5946},
+  "Mysuru": {lat:12.2958, lng:76.6394},
+  "Thiruvananthapuram": {lat:8.5241, lng:76.9366},
+  "Kochi": {lat:9.9312, lng:76.2673},
+  "Hyderabad": {lat:17.3850, lng:78.4867},
+  "Visakhapatnam": {lat:17.6868, lng:83.2185},
+  "New Delhi": {lat:28.6139, lng:77.2090},
+  "Lucknow": {lat:26.8467, lng:80.9462},
+  "Kolkata": {lat:22.5726, lng:88.3639},
+  "Ahmedabad": {lat:23.0225, lng:72.5714},
+  "Jaipur": {lat:26.9124, lng:75.7873}
+};
 
 const DISTRICTS_MAP = {
-  "Tamil Nadu": ["Ariyalur","Chengalpattu","Chennai","Coimbatore","Cuddalore","Dharmapuri","Dindigul","Erode","Kallakurichi","Kanchipuram","Kanyakumari","Karur","Krishnagiri","Madurai","Mayiladuthurai","Nagapattinam","Namakkal","Nilgiris","Perambalur","Pudukkottai","Ramanathapuram","Ranipet","Salem","Sivaganga","Tenkasi","Thanjavur","Theni","Thoothukudi","Tiruchirappalli","Tirunelveli","Tirupathur","Tiruppur","Tiruvallur","Tiruvannamalai","Tiruvarur","Vellore","Viluppuram","Virudhunagar"],
-  "Maharashtra": ["Mumbai City","Pune","Nagpur","Nashik","Thane","Aurangabad","Solapur","Kolhapur"],
-  "Karnataka": ["Bengaluru Urban","Mysuru","Hubballi","Mangaluru","Belagavi","Kalaburagi"],
-  "Kerala": ["Thiruvananthapuram","Kochi","Kozhikode","Kollam","Thrissur","Kannur"],
-  "Delhi (NCT)": ["Central Delhi","New Delhi","North Delhi","South Delhi","West Delhi","East Delhi"],
-  "Uttar Pradesh": ["Lucknow","Kanpur","Varanasi","Agra","Prayagraj","Noida","Ghaziabad"],
-  "West Bengal": ["Kolkata","Howrah","Darjeeling","Siliguri","Asansol","Durgapur"],
-  "Gujarat": ["Ahmedabad","Surat","Vadodara","Rajkot","Bhavnagar","Jamnagar"],
-  "Rajasthan": ["Jaipur","Jodhpur","Udaipur","Kota","Bikaner","Ajmer"],
-  "Telangana": ["Hyderabad","Warangal","Nizamabad","Karimnagar","Khammam"],
-  "Andhra Pradesh": ["Visakhapatnam","Vijayawada","Guntur","Tirupati","Kurnool"]
+  "Tamil Nadu": Object.keys(DISTRICT_COORDS).slice(0, 15),
+  "Maharashtra": ["Mumbai City","Pune"],
+  "Karnataka": ["Bengaluru Urban","Mysuru"],
+  "Kerala": ["Thiruvananthapuram","Kochi"],
+  "Telangana": ["Hyderabad"],
+  "Andhra Pradesh": ["Visakhapatnam"],
+  "Delhi (NCT)": ["New Delhi"],
+  "Uttar Pradesh": ["Lucknow"],
+  "West Bengal": ["Kolkata"],
+  "Gujarat": ["Ahmedabad"],
+  "Rajasthan": ["Jaipur"]
 };
+
+let sensorData = [];
+let trackMap = null;
 
 const state = {
   screen: "route",
-  stateName: "",
-  start: "",
-  end: "",
-  trackId: null,
+  stateName: "Tamil Nadu",
+  start: "Chennai",
+  end: "Coimbatore",
+  trackId: "A",
+  severityFilter: "All"
 };
 
 function render(){
@@ -424,7 +470,7 @@ function renderRoute(){
     `<option value="${s}" ${state.stateName===s?'selected':''}>${s}</option>`
   ).join("");
 
-  const distList = DISTRICTS_MAP[state.stateName] || [];
+  const distList = DISTRICTS_MAP[state.stateName] || Object.keys(DISTRICT_COORDS);
   const startOptions = distList.map(d => `<option value="${d}" ${state.start===d?'selected':''}>${d}</option>`).join("");
   const endOptions = distList.map(d => `<option value="${d}" ${state.end===d?'selected':''}>${d}</option>`).join("");
 
@@ -444,16 +490,14 @@ function renderRoute(){
       <div class="field-row">
         <div class="field">
           <label>Start District</label>
-          <select id="startSel" ${state.stateName ? "" : "disabled"}>
-            <option value="">Select district</option>
+          <select id="startSel">
             ${startOptions}
           </select>
         </div>
         <div class="swap-icon" id="swapBtn" title="Swap">&#8646;</div>
         <div class="field">
           <label>End District</label>
-          <select id="endSel" ${state.stateName ? "" : "disabled"}>
-            <option value="">Select district</option>
+          <select id="endSel">
             ${endOptions}
           </select>
         </div>
@@ -465,8 +509,9 @@ function renderRoute(){
 
   document.getElementById("stateSel").onchange = (e) => {
     state.stateName = e.target.value;
-    state.start = "";
-    state.end = "";
+    const list = DISTRICTS_MAP[state.stateName] || [];
+    state.start = list[0] || "";
+    state.end = list[1] || "";
     render();
   };
   document.getElementById("startSel").onchange = (e) => state.start = e.target.value;
@@ -486,17 +531,13 @@ function renderRoute(){
   };
 }
 
-function getTracksMock(){
-  return [
-    {id: "A", name: "Track A (Main Line)", status: "good", defectCount: 1, healthScore: 94, lastInspection: "Today"},
-    {id: "B", name: "Track B (Fast Loop)", status: "attention", defectCount: 3, healthScore: 82, lastInspection: "Yesterday"},
-    {id: "C", name: "Track C (Freight Line)", status: "critical", defectCount: 5, healthScore: 65, lastInspection: "2 days ago"}
-  ];
-}
-
 function renderTracks(){
   const app = document.getElementById("app");
-  const tracks = getTracksMock();
+  const tracks = [
+    {id: "A", name: "Track A (Main Line)", status: "good", defectCount: 1, healthScore: 94, lastInspection: "Today"},
+    {id: "B", name: "Track B (Fast Loop)", status: "attention", defectCount: 3, healthScore: 82, lastInspection: "Yesterday"},
+    {id: "C", name: "Track C (Freight Corridor)", status: "critical", defectCount: 6, healthScore: 58, lastInspection: "2 days ago"}
+  ];
 
   app.innerHTML = `
     <button class="back-link" id="backBtn">&#8592; Change route</button>
@@ -506,8 +547,8 @@ function renderTracks(){
 
     <div class="stat-row">
       <div class="stat-card"><div class="num">${tracks.length}</div><div class="lbl">Monitored tracks</div></div>
-      <div class="stat-card"><div class="num">MongoDB</div><div class="lbl">Source</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--green)">Online</div><div class="lbl">Backend status</div></div>
+      <div class="stat-card"><div class="num">10</div><div class="lbl">Total defects</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--green)">Online</div><div class="lbl">Backend API</div></div>
       <div class="stat-card"><div class="num" style="color:var(--amber)">Active</div><div class="lbl">Telemetry</div></div>
     </div>
 
@@ -547,18 +588,93 @@ function renderDetail(){
       <div>
         <div class="route-sub" style="margin-bottom:2px;text-transform:uppercase;font-size:11px;">${state.stateName}</div>
         <div class="route-heading">${state.start} <span class="arrow">&#8594;</span> ${state.end}</div>
-        <div class="route-sub">Track ${state.trackId} &middot; Real-Time Telemetry</div>
+        <div class="route-sub">Track ${state.trackId} &middot; Real-Time Telemetry & Defect Map</div>
+      </div>
+    </div>
+
+    <div class="map-panel">
+      <div class="map-panel-title">Track map &middot; OpenStreetMap &middot; click markers for details</div>
+      <div class="track-map" id="trackMap"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:#1F5C99"></span>MongoDB Sensor GPS Location</span>
+        <span><span class="sw" style="background:red"></span>Detected Railway Issue</span>
+        <span><span class="sw" style="background:#ff6600;border-radius:2px;width:14px;height:4px"></span>Railway Corridor</span>
       </div>
     </div>
 
     <div class="sensor-panel" id="sensorPanel">
       <div class="sensor-panel-title">Live Sensor Data · MongoDB Atlas</div>
-      <div class="empty-note">Connecting to database backend...</div>
+      <div class="empty-note">Connecting to MongoDB database...</div>
     </div>
   `;
 
-  document.getElementById("backBtn").onclick = () => { state.screen = "tracks"; render(); };
+  document.getElementById("backBtn").onclick = () => {
+    if(trackMap){ trackMap.remove(); trackMap = null; }
+    state.screen = "tracks";
+    render();
+  };
+
+  initMap();
   loadSensorData();
+}
+
+function initMap(){
+  const container = document.getElementById("trackMap");
+  if(!container || typeof maplibregl === "undefined") return;
+
+  const startCoord = DISTRICT_COORDS[state.start] || {lat:13.0827, lng:80.2707};
+  const endCoord = DISTRICT_COORDS[state.end] || {lat:11.0168, lng:76.9558};
+
+  if(trackMap){ trackMap.remove(); trackMap = null; }
+
+  trackMap = new maplibregl.Map({
+    container: "trackMap",
+    style: "https://tiles.openfreemap.org/styles/bright",
+    center: [(startCoord.lng + endCoord.lng) / 2, (startCoord.lat + endCoord.lat) / 2],
+    zoom: 7.5
+  });
+
+  trackMap.addControl(new maplibregl.NavigationControl(), "top-right");
+
+  // Add Start & End station markers
+  addStationMarker(startCoord, state.start);
+  addStationMarker(endCoord, state.end);
+
+  // Add corridor line
+  const routeCoords = [
+    [startCoord.lng, startCoord.lat],
+    [(startCoord.lng + endCoord.lng)/2 + 0.05, (startCoord.lat + endCoord.lat)/2 - 0.05],
+    [endCoord.lng, endCoord.lat]
+  ];
+
+  trackMap.on("load", () => {
+    trackMap.addSource("route", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: routeCoords }
+      }
+    });
+
+    trackMap.addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route",
+      paint: { "line-color": "#ff6600", "line-width": 5, "line-opacity": 0.85 }
+    });
+
+    const bounds = new maplibregl.LngLatBounds();
+    routeCoords.forEach(c => bounds.extend(c));
+    trackMap.fitBounds(bounds, { padding: 60 });
+  });
+}
+
+function addStationMarker(coord, label){
+  if(!trackMap) return;
+  const el = document.createElement("div");
+  el.className = "mgl-station-marker";
+  el.innerHTML = `<div class="lbl">${label}</div><div class="sq"></div>`;
+  new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([coord.lng, coord.lat]).addTo(trackMap);
 }
 
 async function loadSensorData(){
@@ -569,14 +685,14 @@ async function loadSensorData(){
     const res = await fetch(`${BACKEND_URL}/api/data`, {cache:"no-store"});
     if(!res.ok) throw new Error(`HTTP error ${res.status}`);
     const json = await res.json();
-    const data = Array.isArray(json) ? json : (json.data || []);
+    sensorData = Array.isArray(json) ? json : (json.data || []);
 
-    if(!data.length){
+    if(!sensorData.length){
       panel.innerHTML = `<div class="sensor-panel-title">Live Sensor Data · MongoDB Atlas</div><div class="empty-note">No documents found in MongoDB collection.</div>`;
       return;
     }
 
-    const latest = data[0];
+    const latest = sensorData[0];
     panel.innerHTML = `
       <div class="sensor-panel-title">Live Sensor Data · MongoDB Atlas (Database: ${json.database || "SIH25020"})</div>
       <div class="sensor-grid">
@@ -588,13 +704,13 @@ async function loadSensorData(){
       <div class="sensor-subgrid">
         <div class="sensor-value"><div class="k">Latitude</div><div class="v">${latest.location_latitude ?? "N/A"}</div></div>
         <div class="sensor-value"><div class="k">Longitude</div><div class="v">${latest.location_longitude ?? "N/A"}</div></div>
-        <div class="sensor-value"><div class="k">Total Records Loaded</div><div class="v">${data.length}</div></div>
+        <div class="sensor-value"><div class="k">Total Records Loaded</div><div class="v">${sensorData.length}</div></div>
       </div>
       <div class="sensor-table-wrap">
         <table class="sensor-table">
           <thead><tr><th>Timestamp</th><th>Temperature</th><th>Status</th><th>Lat</th><th>Lng</th><th>Device</th></tr></thead>
           <tbody>
-            ${data.slice(0, 15).map(r=>`
+            ${sensorData.slice(0, 15).map(r=>`
               <tr>
                 <td>${r.timestamp ?? ""}</td>
                 <td>${r.temperature ?? ""}</td>
@@ -608,15 +724,45 @@ async function loadSensorData(){
         </table>
       </div>
     `;
+
+    // Plot database coordinates on the map
+    plotDatabasePoints();
+
   } catch(err) {
     panel.innerHTML = `
       <div class="sensor-panel-title">Live Sensor Data · MongoDB Atlas</div>
       <div class="empty-note" style="color:var(--red);">
         Could not connect to backend at <code>${BACKEND_URL}</code>.<br/>
-        <small style="color:var(--ink-soft);">If your Render instance was asleep, please wait 30 seconds and refresh.</small>
+        <small style="color:var(--ink-soft);">Please wait 30 seconds and refresh if the instance is waking up.</small>
       </div>
     `;
   }
+}
+
+function plotDatabasePoints(){
+  if(!trackMap || !sensorData.length) return;
+
+  sensorData.slice(0, 20).forEach((r) => {
+    const lat = Number(r.location_latitude);
+    const lng = Number(r.location_longitude);
+    if(isNaN(lat) || isNaN(lng)) return;
+
+    const el = document.createElement("div");
+    el.className = "mgl-sensor-marker";
+    
+    const popup = new maplibregl.Popup({ offset: 12 }).setHTML(`
+      <div class="popup">
+        <h3 style="color:#1F5C99;">📍 MongoDB Sensor Record</h3>
+        <p><strong>Device:</strong> ${r.device_id || "N/A"}</p>
+        <p><strong>Status:</strong> ${r.overall_status || "OK"}</p>
+        <p><strong>Temperature:</strong> ${r.temperature || "N/A"} °C</p>
+        <p><strong>Lat, Lng:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}</p>
+        <p><strong>Time:</strong> ${r.timestamp || "N/A"}</p>
+      </div>
+    `);
+
+    new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).setPopup(popup).addTo(trackMap);
+  });
 }
 
 window.onload = render;
